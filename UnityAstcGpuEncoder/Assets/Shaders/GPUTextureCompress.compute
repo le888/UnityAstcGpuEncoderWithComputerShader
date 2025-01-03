@@ -1,0 +1,24 @@
+#pragma kernel CSCompress
+
+#pragma multi_compile _COMPRESS_ASTC4x4 _COMPRESS_ASTC5x5 _COMPRESS_ASTC6x6
+#pragma multi_compile __ _GPU_COMPRESS_SRGB
+
+#include "GPUTextureCompress.hlsl"
+
+RWTexture2D<uint4> _Result;
+uint2 TextureSize;
+
+
+[numthreads(8,8,1)]
+void CSCompress(uint3 id : SV_DispatchThreadID)
+{
+    // 确保不超出纹理边界
+    if (id.x >= TextureSize.x || id.y >= TextureSize.y)
+        return;
+        
+    // 计算当前块的索引
+    uint2 blockIndex = id.xy * PIXEL_COUNT_1D;
+    
+    // 压缩当前块
+    _Result[id.xy] = Compress(blockIndex);
+}
