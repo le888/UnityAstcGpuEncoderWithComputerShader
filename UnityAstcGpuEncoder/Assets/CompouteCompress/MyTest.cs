@@ -58,7 +58,7 @@ namespace MyTest
             deTxture = new Texture2D(sourceTexture.width, sourceTexture.height,gfxFormat,0, TextureCreationFlags.None);
             deTxture.filterMode = FilterMode.Trilinear;
             deTxture.wrapMode = TextureWrapMode.Clamp;
-            deTxture.name = "astc Destexture";
+            deTxture.name = "aaaaaaa astc Destexture";//方便内存查看
             deTxture.Apply(false, true); // 让贴图变成不可读，以卸载内存只保留显存
             
             

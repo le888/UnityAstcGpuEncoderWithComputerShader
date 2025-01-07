@@ -32,9 +32,10 @@ namespace ASTCEncoderWithComputeShader
 
         private RenderTexture m_IntermediateTexture;
         private RenderTexture m_DecompressTexture;
-        private RenderTargetIdentifier m_IntermediateTextureId;
-        private Mesh m_FullScreenMesh;
+        // private RenderTargetIdentifier m_IntermediateTextureId;
+        // private Mesh m_FullScreenMesh;
 
+        private static int k_ResultDecompressedId = Shader.PropertyToID("_ResultDecompressed");  
         private static int k_SourceTextureId = Shader.PropertyToID("_CompressSourceTexture");
         private static int k_SourceTextureMipLevelId = Shader.PropertyToID("_CompressSourceTexture_MipLevel");
         private static int k_ResultId = Shader.PropertyToID("_Result");
@@ -54,8 +55,8 @@ namespace ASTCEncoderWithComputeShader
         private void OnEnable()
         {
             // DomainReload之后恢复无法序列化的数据
-            if (m_IntermediateTexture != null)
-                m_IntermediateTextureId = m_IntermediateTexture;
+            // if (m_IntermediateTexture != null)
+            //     m_IntermediateTextureId = m_IntermediateTexture;
         }
 
         public void ReInit(ComputeShader compressShader, int srcWidth, int srcHeight, ASTC_BLOCKSIZE astcBlockSize)
@@ -79,7 +80,7 @@ namespace ASTCEncoderWithComputeShader
             m_IntermediateTexture.enableRandomWrite = true;
             m_IntermediateTexture.name = "GPU Compressor Intermediate Texture";
             m_IntermediateTexture.Create();
-            m_IntermediateTextureId = m_IntermediateTexture;
+            // m_IntermediateTextureId = m_IntermediateTexture;
             // m_CompressMaterial.SetTexture(k_ResultId, m_IntermediateTexture);
             //computeShader 设置result
             m_compressorKernel = m_computerShader.FindKernel("CSCompress");
@@ -97,19 +98,6 @@ namespace ASTCEncoderWithComputeShader
                 m_DecompressTexture.Create();
             }
             
-            if (!m_FullScreenMesh)
-            {
-                m_FullScreenMesh = new Mesh();
-                m_FullScreenMesh.hideFlags = HideFlags.HideAndDontSave;
-                m_FullScreenMesh.vertices = new []
-                {
-                    new Vector3(-1, -1, 0),
-                    new Vector3(-1, 3, 0),
-                    new Vector3(3, -1, 0),
-                };
-                m_FullScreenMesh.triangles = new [] { 0, 1, 2 }; 
-                m_FullScreenMesh.RecalculateBounds();
-            }
         }
 
         private int CompressBlockSize
@@ -128,22 +116,6 @@ namespace ASTCEncoderWithComputeShader
 
         private void RecreateMaterial(ComputeShader compressShader, ASTC_BLOCKSIZE prevBlocksize, ASTC_BLOCKSIZE blocksize)
         {
-            // if (compressShader != null && compressShader.shader == compressShader)
-            // {
-            //     if (prevBlocksize != blocksize)
-            //     {
-            //         // 仍然需要重新创建材质
-            //         DestroyImmediate(m_CompressMaterial);
-            //         m_CompressMaterial = null;
-            //     }
-            //     else
-            //     {
-            //         return;
-            //     }
-            // }
-            
-            // m_CompressMaterial = new Material(compressShader);
-            // m_CompressMaterial.hideFlags = HideFlags.HideAndDontSave;
             
             if (blocksize == ASTC_BLOCKSIZE.ASTC_5x5)
             {
@@ -217,13 +189,8 @@ namespace ASTCEncoderWithComputeShader
 
             DestroyImmediate(m_IntermediateTexture);
             m_IntermediateTexture = null;
-            m_IntermediateTextureId = BuiltinRenderTextureType.None;
+            // m_IntermediateTextureId = BuiltinRenderTextureType.None;
             
-            DestroyImmediate(m_FullScreenMesh);
-            m_FullScreenMesh = null;
-            
-            // DestroyImmediate(m_CompressMaterial);
-            // m_CompressMaterial = null;
         }
 
         public Texture CreateOutputTexture(int mipCount, int sliceCount, bool srgb, GraphicsFormat noCompressFallback = GraphicsFormat.R8G8B8A8_UNorm)
@@ -270,13 +237,12 @@ namespace ASTCEncoderWithComputeShader
                 return;
             }
 
-            // cmd.SetRenderTarget(m_IntermediateTextureId);
-            m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_IntermediateTexture);
+            
             int rtWidth = m_IntermediateTexture.width >> mipLevel, rtHeight = m_IntermediateTexture.height >> mipLevel;
             // cmd.SetViewport(new Rect(0, 0, rtWidth, rtHeight));
             
             if (DecompressAstc())
-                m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_DecompressTexture);
+                m_computerShader.SetTexture(m_compressorKernel, k_ResultDecompressedId, m_DecompressTexture);
                 // cmd.SetRandomWriteTarget(1, m_DecompressTexture);
             
             if (QualitySettings.activeColorSpace == ColorSpace.Linear && srgb)
@@ -286,10 +252,8 @@ namespace ASTCEncoderWithComputeShader
             
             int destWidth = m_TextureWidth >> mipLevel, destHeight = m_TextureHeight >> mipLevel;
             m_computerShader.SetVector(k_DestRectId, new Vector4(destWidth, destHeight, 1.0f / destWidth, 1.0f / destHeight));
-            // cmd.SetGlobalTexture(k_SourceTextureId, sourceTexture);
             m_computerShader.SetTexture(m_compressorKernel, k_SourceTextureId, sourceTexture);
             m_computerShader.SetInt(k_SourceTextureMipLevelId, mipLevel);
-            
             m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_IntermediateTexture);
             cmd.BeginSample("Compress");
             // cmd.DrawMesh(m_FullScreenMesh, Matrix4x4.identity, m_CompressMaterial, 0, 0);
@@ -302,7 +266,7 @@ namespace ASTCEncoderWithComputeShader
             {
                 cmd.BeginSample("CopyTexture");
                 cmd.CopyTexture(
-                    m_IntermediateTextureId, 0, 0, 0, 0, rtWidth, rtHeight,
+                    m_IntermediateTexture, 0, 0, 0, 0, rtWidth, rtHeight,
                     targetTexture, dstElement,mipLevel,0,0);
                 cmd.EndSample("CopyTexture");
             }
