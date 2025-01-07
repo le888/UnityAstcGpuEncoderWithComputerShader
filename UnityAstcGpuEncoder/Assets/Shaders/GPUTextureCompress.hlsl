@@ -4,7 +4,7 @@ Texture2D<float4> _CompressSourceTexture;
 SamplerState sampler_CompressSourceTexture;
 int _CompressSourceTexture_MipLevel;
 float4 _DestRect;
-RWTexture2D<float4> _ResultDecompressed : register(u1);
+RWTexture2D<float4> _ResultDecompressed;// : register(u1);
 
 // UV是Block最左下角的位置
 void ReadBlockRGB(Texture2D<float4> SourceTexture, SamplerState TextureSampler, int mipLevel, float2 UV, float2 TexelUVSize, out float3 Block[PIXEL_COUNT_2D])
@@ -50,8 +50,9 @@ uint4 Compress(float2 SamplePos)
     }
 #endif
 
-    // ASTC
-    uint4 result = CompressASTCBlock(BlockBaseColor);
-    WriteDecompressedResult((int2)SamplePos, BlockBaseColor);
-    return result;
+     // ASTC
+     uint4 result = CompressASTCBlock(BlockBaseColor);
+     WriteDecompressedResult((int2)SamplePos, BlockBaseColor);
+     return result;
+    // return uint4(1,1,1,1);
 }

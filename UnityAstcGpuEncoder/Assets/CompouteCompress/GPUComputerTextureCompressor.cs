@@ -2,7 +2,7 @@
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
-namespace ASTCEncoder
+namespace ASTCEncoderWithComputeShader
 {
     public enum ASTC_BLOCKSIZE
     {
@@ -11,7 +11,7 @@ namespace ASTCEncoder
         ASTC_6x6,
     }
 
-    public class GPUTextureCompressor : MonoBehaviour
+    public class GPUComputerTextureCompressor : MonoBehaviour
     {
         // 安卓模拟器可能不支持GPU压缩ASTC，检测到模拟器的话应该关闭GPU压缩
         public static bool EnableCompress { get; set; } = true;
@@ -25,7 +25,9 @@ namespace ASTCEncoder
         // 指定ASTC的块大小，只有当UseASTC()返回true时才有效
         public ASTC_BLOCKSIZE ASTCBlockSize { get; private set; }
 
-        private Material m_CompressMaterial;
+        // private Material m_CompressMaterial;
+        private ComputeShader m_computerShader;
+        private int m_compressorKernel;
         private int m_TextureWidth, m_TextureHeight;
 
         private RenderTexture m_IntermediateTexture;
@@ -56,8 +58,9 @@ namespace ASTCEncoder
                 m_IntermediateTextureId = m_IntermediateTexture;
         }
 
-        public void ReInit(Shader compressShader, int srcWidth, int srcHeight, ASTC_BLOCKSIZE astcBlockSize)
+        public void ReInit(ComputeShader compressShader, int srcWidth, int srcHeight, ASTC_BLOCKSIZE astcBlockSize)
         {
+            m_computerShader = compressShader;
             m_TextureWidth = srcWidth;
             m_TextureHeight = srcHeight;
             RecreateMaterial(compressShader, ASTCBlockSize, astcBlockSize);
@@ -73,11 +76,15 @@ namespace ASTCEncoder
                 m_TextureWidth / blockSize, m_TextureHeight / blockSize, 0, 
                 GraphicsFormat.R32G32B32A32_UInt, 1);
             m_IntermediateTexture.hideFlags = HideFlags.HideAndDontSave;
+            m_IntermediateTexture.enableRandomWrite = true;
             m_IntermediateTexture.name = "GPU Compressor Intermediate Texture";
             m_IntermediateTexture.Create();
             m_IntermediateTextureId = m_IntermediateTexture;
-            m_CompressMaterial.SetTexture(k_ResultId, m_IntermediateTexture);
-
+            // m_CompressMaterial.SetTexture(k_ResultId, m_IntermediateTexture);
+            //computeShader 设置result
+            m_compressorKernel = m_computerShader.FindKernel("CSCompress");
+            m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_IntermediateTexture);
+            
             if (DecompressAstc())
             {
                 if (m_DecompressTexture)
@@ -119,42 +126,42 @@ namespace ASTCEncoder
             }
         }
 
-        private void RecreateMaterial(Shader compressShader, ASTC_BLOCKSIZE prevBlocksize, ASTC_BLOCKSIZE blocksize)
+        private void RecreateMaterial(ComputeShader compressShader, ASTC_BLOCKSIZE prevBlocksize, ASTC_BLOCKSIZE blocksize)
         {
-            if (m_CompressMaterial != null && m_CompressMaterial.shader == compressShader)
-            {
-                if (prevBlocksize != blocksize)
-                {
-                    // 仍然需要重新创建材质
-                    DestroyImmediate(m_CompressMaterial);
-                    m_CompressMaterial = null;
-                }
-                else
-                {
-                    return;
-                }
-            }
+            // if (compressShader != null && compressShader.shader == compressShader)
+            // {
+            //     if (prevBlocksize != blocksize)
+            //     {
+            //         // 仍然需要重新创建材质
+            //         DestroyImmediate(m_CompressMaterial);
+            //         m_CompressMaterial = null;
+            //     }
+            //     else
+            //     {
+            //         return;
+            //     }
+            // }
             
-            m_CompressMaterial = new Material(compressShader);
-            m_CompressMaterial.hideFlags = HideFlags.HideAndDontSave;
+            // m_CompressMaterial = new Material(compressShader);
+            // m_CompressMaterial.hideFlags = HideFlags.HideAndDontSave;
             
             if (blocksize == ASTC_BLOCKSIZE.ASTC_5x5)
             {
-                m_CompressMaterial.EnableKeyword("_COMPRESS_ASTC5x5");
-                m_CompressMaterial.DisableKeyword("_COMPRESS_ASTC4x4");
-                m_CompressMaterial.DisableKeyword("_COMPRESS_ASTC6x6");
+                compressShader.EnableKeyword("_COMPRESS_ASTC5x5");
+                compressShader.DisableKeyword("_COMPRESS_ASTC4x4");
+                compressShader.DisableKeyword("_COMPRESS_ASTC6x6");
             }
             else if (blocksize == ASTC_BLOCKSIZE.ASTC_4x4)
             {
-                m_CompressMaterial.EnableKeyword("_COMPRESS_ASTC4x4");
-                m_CompressMaterial.DisableKeyword("_COMPRESS_ASTC5x5");
-                m_CompressMaterial.DisableKeyword("_COMPRESS_ASTC6x6");
+                compressShader.EnableKeyword("_COMPRESS_ASTC4x4");
+                compressShader.DisableKeyword("_COMPRESS_ASTC5x5");
+                compressShader.DisableKeyword("_COMPRESS_ASTC6x6");
             }
             else
             {
-                m_CompressMaterial.EnableKeyword("_COMPRESS_ASTC6x6");
-                m_CompressMaterial.DisableKeyword("_COMPRESS_ASTC4x4");
-                m_CompressMaterial.DisableKeyword("_COMPRESS_ASTC5x5");
+                compressShader.EnableKeyword("_COMPRESS_ASTC6x6");
+                compressShader.DisableKeyword("_COMPRESS_ASTC4x4");
+                compressShader.DisableKeyword("_COMPRESS_ASTC5x5");
                 
                 var quintsLookup = new float[]
                 {
@@ -188,14 +195,15 @@ namespace ASTCEncoder
                 };
                 for (int i = 0; i < colorQuantTable.Length; i++)
                     colorQuantTable[i] += 0.5f;
-                m_CompressMaterial.SetFloatArray(k_IntegerFromQuintsId, quintsLookup);
-                m_CompressMaterial.SetFloatArray(k_ColorQuantTableId, colorQuantTable);
+                
+                compressShader.SetFloats(k_IntegerFromQuintsId, quintsLookup);
+                compressShader.SetFloats(k_ColorQuantTableId, colorQuantTable);
             }
             
             if (DecompressAstc())
-                m_CompressMaterial.EnableKeyword("_DECOMPRESS_RGB");
+                compressShader.EnableKeyword("_DECOMPRESS_RGB");
             else
-                m_CompressMaterial.DisableKeyword("_DECOMPRESS_RGB");
+                compressShader.DisableKeyword("_DECOMPRESS_RGB");
         }
 
         public int TextureWidth => m_TextureWidth;
@@ -214,8 +222,8 @@ namespace ASTCEncoder
             DestroyImmediate(m_FullScreenMesh);
             m_FullScreenMesh = null;
             
-            DestroyImmediate(m_CompressMaterial);
-            m_CompressMaterial = null;
+            // DestroyImmediate(m_CompressMaterial);
+            // m_CompressMaterial = null;
         }
 
         public Texture CreateOutputTexture(int mipCount, int sliceCount, bool srgb, GraphicsFormat noCompressFallback = GraphicsFormat.R8G8B8A8_UNorm)
@@ -251,7 +259,7 @@ namespace ASTCEncoder
             return output;
         }
 
-        public void CompressTexture(CommandBuffer cmd, RenderTargetIdentifier sourceTexture, RenderTargetIdentifier targetTexture, int dstElement, int mipLevel, bool srgb = false)
+        public void CompressTexture(CommandBuffer cmd, Texture sourceTexture, Texture targetTexture, int dstElement, int mipLevel, bool srgb = false)
         {
             if (!EnableCompress)
             {
@@ -262,28 +270,33 @@ namespace ASTCEncoder
                 return;
             }
 
-            cmd.SetRenderTarget(m_IntermediateTextureId);
+            // cmd.SetRenderTarget(m_IntermediateTextureId);
+            m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_IntermediateTexture);
             int rtWidth = m_IntermediateTexture.width >> mipLevel, rtHeight = m_IntermediateTexture.height >> mipLevel;
-            cmd.SetViewport(new Rect(0, 0, rtWidth, rtHeight));
+            // cmd.SetViewport(new Rect(0, 0, rtWidth, rtHeight));
             
             if (DecompressAstc())
-                cmd.SetRandomWriteTarget(1, m_DecompressTexture);
+                m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_DecompressTexture);
+                // cmd.SetRandomWriteTarget(1, m_DecompressTexture);
             
             if (QualitySettings.activeColorSpace == ColorSpace.Linear && srgb)
-                cmd.EnableShaderKeyword("_GPU_COMPRESS_SRGB");
+                m_computerShader.EnableKeyword("_GPU_COMPRESS_SRGB");
             else
-                cmd.DisableShaderKeyword("_GPU_COMPRESS_SRGB");
+                m_computerShader.DisableKeyword("_GPU_COMPRESS_SRGB");
             
             int destWidth = m_TextureWidth >> mipLevel, destHeight = m_TextureHeight >> mipLevel;
-            cmd.SetGlobalVector(k_DestRectId, new Vector4(destWidth, destHeight, 1.0f / destWidth, 1.0f / destHeight));
-            cmd.SetGlobalTexture(k_SourceTextureId, sourceTexture);
-            cmd.SetGlobalInt(k_SourceTextureMipLevelId, mipLevel);
+            m_computerShader.SetVector(k_DestRectId, new Vector4(destWidth, destHeight, 1.0f / destWidth, 1.0f / destHeight));
+            // cmd.SetGlobalTexture(k_SourceTextureId, sourceTexture);
+            m_computerShader.SetTexture(m_compressorKernel, k_SourceTextureId, sourceTexture);
+            m_computerShader.SetInt(k_SourceTextureMipLevelId, mipLevel);
             
+            m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_IntermediateTexture);
             cmd.BeginSample("Compress");
-            cmd.DrawMesh(m_FullScreenMesh, Matrix4x4.identity, m_CompressMaterial, 0, 0);
+            // cmd.DrawMesh(m_FullScreenMesh, Matrix4x4.identity, m_CompressMaterial, 0, 0);
+            cmd.DispatchCompute(m_computerShader,m_compressorKernel, rtWidth / 8, rtHeight / 8, 1);
             cmd.EndSample("Compress");
             
-            cmd.SetRenderTarget(BuiltinRenderTextureType.None);
+            // cmd.SetRenderTarget(BuiltinRenderTextureType.None);
 
             if (!DecompressAstc())
             {
