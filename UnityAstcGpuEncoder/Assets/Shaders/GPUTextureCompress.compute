@@ -21,7 +21,7 @@ void CSCompress(uint3 id : SV_DispatchThreadID)
     uint2 blockIndex = id.xy * PIXEL_COUNT_1D;
     
     // 压缩当前块
-    // _Result[id.xy] = Compress(floor(id.xy) * PIXEL_COUNT_1D);
+    _Result[id.xy] = Compress(floor(id.xy) * PIXEL_COUNT_1D);
     // _Result[id.xy] = uint4(blockIndex,blockIndex);
-    _Result[id.xy] = Compress(blockIndex);
+    // _Result[id.xy] = Compress(blockIndex);
 }

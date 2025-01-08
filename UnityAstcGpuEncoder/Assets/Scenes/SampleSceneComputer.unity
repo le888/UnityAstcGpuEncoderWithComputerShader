@@ -609,7 +609,7 @@ MonoBehaviour:
   sourceTexture: {fileID: 2800000, guid: 959d7041374c14041bb13b682f523610, type: 3}
   computeShader: {fileID: 7200000, guid: 215040e28e060d245a01689f6d588a7a, type: 3}
   material: {fileID: 2100000, guid: 030f0ad0fe5117a4a90c4033c6cdde97, type: 2}
-  astcTYPE: 1
+  astcTYPE: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
