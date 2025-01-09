@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using Unity.Mathematics;
+using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
@@ -255,9 +256,15 @@ namespace ASTCEncoderWithComputeShader
             m_computerShader.SetTexture(m_compressorKernel, k_SourceTextureId, sourceTexture);
             m_computerShader.SetInt(k_SourceTextureMipLevelId, mipLevel);
             m_computerShader.SetTexture(m_compressorKernel, k_ResultId, m_IntermediateTexture);
+            m_computerShader.SetVector("TextureSize", new Vector4(sourceTexture.width, sourceTexture.height, 0, 0));
             cmd.BeginSample("Compress");
             // cmd.DrawMesh(m_FullScreenMesh, Matrix4x4.identity, m_CompressMaterial, 0, 0);
-            cmd.DispatchCompute(m_computerShader,m_compressorKernel, rtWidth / 8, rtHeight / 8, 1);
+            // cmd.DispatchCompute(m_computerShader,m_compressorKernel,  rtWidth / 8, rtHeight / 8, 1);
+            float blockSize = CompressBlockSize;
+
+            int threadGroupX = Mathf.CeilToInt(sourceTexture.width / blockSize);
+            int threadGroupY = Mathf.CeilToInt(sourceTexture.height / blockSize);
+            cmd.DispatchCompute(m_computerShader,m_compressorKernel,  threadGroupX , threadGroupY, 1);
             cmd.EndSample("Compress");
             
             // cmd.SetRenderTarget(BuiltinRenderTextureType.None);
@@ -272,10 +279,10 @@ namespace ASTCEncoderWithComputeShader
             }
             else
             {
-                var blockSize = CompressBlockSize;
+                
                 cmd.CopyTexture(
                     m_DecompressTexture, 0, 0, 0, 0, 
-                    rtWidth * blockSize, rtHeight * blockSize,
+                    rtWidth * CompressBlockSize, rtHeight * CompressBlockSize,
                     targetTexture, dstElement,mipLevel,0,0);
             }
         }

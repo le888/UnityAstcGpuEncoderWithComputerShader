@@ -40,10 +40,17 @@ namespace MyTest
         
         public ASTC_BLOCKSIZE astcTYPE = ASTC_BLOCKSIZE.ASTC_5x5;
         
+        int imageSizeWidth; 
+        int imageSizeHeight;
+        
         private void OnEnable()
         {
             int blockSize = CompressBlockSize;
-            astcRT = new RenderTexture(sourceTexture.width/blockSize, sourceTexture.height/blockSize, 0,GraphicsFormat.R32G32B32A32_UInt,1);
+            imageSizeWidth = Mathf.CeilToInt(sourceTexture.width / (float)blockSize);
+            imageSizeHeight = Mathf.CeilToInt(sourceTexture.height / (float)blockSize);
+            // imageSizeWidth = (int)(sourceTexture.width / (float)blockSize);
+            // imageSizeHeight = (int)(sourceTexture.height / (float)blockSize);
+            astcRT = new RenderTexture(imageSizeWidth, imageSizeHeight, 0,GraphicsFormat.R32G32B32A32_UInt,1);
             astcRT.enableRandomWrite = true;
             astcRT.name = "astcRT Intermediate texture";
             astcRT.Create();
@@ -55,7 +62,8 @@ namespace MyTest
             if (DecompressAstc())
                 gfxFormat = GraphicsFormat.R8G8B8A8_UNorm;
             
-            deTxture = new Texture2D(sourceTexture.width, sourceTexture.height,gfxFormat,0, TextureCreationFlags.None);
+            deTxture = new Texture2D(imageSizeWidth * blockSize, imageSizeHeight * blockSize,gfxFormat,1, TextureCreationFlags.None);
+            // deTxture = new Texture2D(sourceTexture.width, sourceTexture.height,gfxFormat,0, TextureCreationFlags.None);
             deTxture.filterMode = FilterMode.Trilinear;
             deTxture.wrapMode = TextureWrapMode.Clamp;
             deTxture.name = "aaaaaaa astc Destexture";//方便内存查看
@@ -67,6 +75,7 @@ namespace MyTest
                 if (m_DecompressTexture)
                     DestroyImmediate(m_DecompressTexture);
                 
+                // m_DecompressTexture = new RenderTexture(imageSizeWidth * blockSize, imageSizeHeight * blockSize, 0, GraphicsFormat.R8G8B8A8_UNorm, 1);
                 m_DecompressTexture = new RenderTexture(sourceTexture.width, sourceTexture.height, 0, GraphicsFormat.R8G8B8A8_UNorm, 1);
                 m_DecompressTexture.hideFlags = HideFlags.HideAndDontSave;
                 m_DecompressTexture.name = "GPU Compressor Decompress Texture";
@@ -101,11 +110,13 @@ namespace MyTest
                 computeShader.SetTexture(kernelHandle, "_ResultDecompressed", m_DecompressTexture);
                 
             
+            int blockSize = CompressBlockSize;
             computeShader.SetTexture(kernelHandle,k_SourceTextureId,sourceTexture);
             computeShader.SetVector(k_DestRectId, new Vector4(sourceTexture.width, sourceTexture.height, 1.0f / sourceTexture.width, 1.0f / sourceTexture.height));
             computeShader.SetInt(k_SourceTextureMipLevelId, 0);
             computeShader.SetTexture(kernelHandle, k_ResultId, astcRT);
-            computeShader.Dispatch(kernelHandle, sourceTexture.width / 8, sourceTexture.height / 8, 1);
+            computeShader.SetVector("TextureSize", new Vector4(sourceTexture.width, sourceTexture.height, 0, 0));
+            computeShader.Dispatch(kernelHandle, sourceTexture.width / blockSize, sourceTexture.height / blockSize, 1);
             
             //复制astcRT到deTxture
             // Graphics.CopyTexture(astcRT,0,0,0,0,astcRT.width,astcRT.height,deTxture,0,0,0,0);
@@ -115,7 +126,7 @@ namespace MyTest
             }
             else
             {
-                Graphics.CopyTexture(m_DecompressTexture,0,0,0,0,sourceTexture.width,sourceTexture.height,deTxture,0,0,0,0);    
+                Graphics.CopyTexture(m_DecompressTexture,0,0,0,0,m_DecompressTexture.width,m_DecompressTexture.height,deTxture,0,0,0,0);    
             }
 
             
