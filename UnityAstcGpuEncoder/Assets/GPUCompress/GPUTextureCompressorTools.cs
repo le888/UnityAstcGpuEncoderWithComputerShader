@@ -101,7 +101,7 @@ namespace GPUASTCTextureCompressor
         private void CompressorTexture(Texture sourceTexture, RenderTexture m_DecompressTexture)
         {
             //检查是否支持computer shader
-            if (SystemInfo.supportsComputeShaders && false)
+            if (SystemInfo.supportsComputeShaders)
             {
                 //compute shader 压缩
                 if (_computerShaderCompressor == null)
